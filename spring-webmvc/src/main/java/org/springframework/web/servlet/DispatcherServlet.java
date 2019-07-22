@@ -907,8 +907,10 @@ public class DispatcherServlet extends FrameworkServlet {
 	 */
 	@Override
 	protected void doService(HttpServletRequest request, HttpServletResponse response) throws Exception {
+		// 记录请求
 		logRequest(request);
 
+		// 保存请求参数快照
 		// Keep a snapshot of the request attributes in case of an include,
 		// to be able to restore the original attributes after the include.
 		Map<String, Object> attributesSnapshot = null;
@@ -1008,20 +1010,22 @@ public class DispatcherServlet extends FrameworkServlet {
 			Exception dispatchException = null;
 
 			try {
+				// 检查是否是上传请求
 				processedRequest = checkMultipart(request);
 				multipartRequestParsed = (processedRequest != request);
 
-				// Determine handler for the current request.
+				// 获得请求对应的HandlerExecutionChain对象
 				mappedHandler = getHandler(processedRequest);
+				// 如果获取不到 则根据配置抛出异常或返回404异常
 				if (mappedHandler == null) {
 					noHandlerFound(processedRequest, response);
 					return;
 				}
 
-				// Determine handler adapter for the current request.
+				// 根据handler找到HandlerAdapter
 				HandlerAdapter ha = getHandlerAdapter(mappedHandler.getHandler());
 
-				// Process last-modified header, if supported by the handler.
+				// 处理Last-Modified
 				String method = request.getMethod();
 				boolean isGet = "GET".equals(method);
 				if (isGet || "HEAD".equals(method)) {
@@ -1031,28 +1035,32 @@ public class DispatcherServlet extends FrameworkServlet {
 					}
 				}
 
+				// 前置处理拦截器
 				if (!mappedHandler.applyPreHandle(processedRequest, response)) {
 					return;
 				}
 
-				// Actually invoke the handler.
+				// HandlerAdapter使用Handler处理请求 并返回视图
 				mv = ha.handle(processedRequest, response, mappedHandler.getHandler());
 
+				// 是否需要异步处理
 				if (asyncManager.isConcurrentHandlingStarted()) {
 					return;
 				}
 
+				// 当view为空时 根据request设置默认view
 				applyDefaultViewName(processedRequest, mv);
+				// 后置处理拦截器
 				mappedHandler.applyPostHandle(processedRequest, response, mv);
 			}
 			catch (Exception ex) {
 				dispatchException = ex;
 			}
 			catch (Throwable err) {
-				// As of 4.3, we're processing Errors thrown from handler methods as well,
-				// making them available for @ExceptionHandler methods and other scenarios.
+				// 如果出现异常 则将异常设置到dispatchException中
 				dispatchException = new NestedServletException("Handler dispatch failed", err);
 			}
+			// 1.如果传入了异常 则设置到对应的view中 2.渲染页面 3.发出请求完成的通知触发Interceptor的afterCompletion
 			processDispatchResult(processedRequest, response, mappedHandler, mv, dispatchException);
 		}
 		catch (Exception ex) {
@@ -1063,6 +1071,7 @@ public class DispatcherServlet extends FrameworkServlet {
 					new NestedServletException("Handler processing failed", err));
 		}
 		finally {
+			// 释放资源
 			if (asyncManager.isConcurrentHandlingStarted()) {
 				// Instead of postHandle and afterCompletion
 				if (mappedHandler != null) {
@@ -1091,8 +1100,7 @@ public class DispatcherServlet extends FrameworkServlet {
 	}
 
 	/**
-	 * Handle the result of handler selection and handler invocation, which is
-	 * either a ModelAndView or an Exception to be resolved to a ModelAndView.
+	 *  处理正常和异常的请求调用结果
 	 */
 	private void processDispatchResult(HttpServletRequest request, HttpServletResponse response,
 			@Nullable HandlerExecutionChain mappedHandler, @Nullable ModelAndView mv,
@@ -1100,6 +1108,7 @@ public class DispatcherServlet extends FrameworkServlet {
 
 		boolean errorView = false;
 
+		// 是否包含异常
 		if (exception != null) {
 			if (exception instanceof ModelAndViewDefiningException) {
 				logger.debug("ModelAndViewDefiningException encountered", exception);

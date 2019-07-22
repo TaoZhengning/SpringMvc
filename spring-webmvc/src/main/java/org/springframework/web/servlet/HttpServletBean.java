@@ -147,14 +147,17 @@ public abstract class HttpServletBean extends HttpServlet implements Environment
 	@Override
 	public final void init() throws ServletException {
 
-		// Set bean properties from init parameters.
+		// 将Servlet的方法设置到pvs中 requiredProperties为必要属性 如果未配置将会报错
 		PropertyValues pvs = new ServletConfigPropertyValues(getServletConfig(), this.requiredProperties);
 		if (!pvs.isEmpty()) {
 			try {
+				// BeanWrapper是spring提供的可以直接操作JavaBean属性的工具
 				BeanWrapper bw = PropertyAccessorFactory.forBeanPropertyAccess(this);
 				ResourceLoader resourceLoader = new ServletContextResourceLoader(getServletContext());
 				bw.registerCustomEditor(Resource.class, new ResourceEditor(resourceLoader, getEnvironment()));
+				// 模版方法 可以在子类调用 做一些初始化工作 bw代表的是DispatcherServlet
 				initBeanWrapper(bw);
+				// 将配置的初始化值设置到DispatcherServlet中
 				bw.setPropertyValues(pvs, true);
 			}
 			catch (BeansException ex) {
@@ -165,7 +168,7 @@ public abstract class HttpServletBean extends HttpServlet implements Environment
 			}
 		}
 
-		// Let subclasses do whatever initialization they like.
+		// 模版方法 子类初始化的入口
 		initServletBean();
 	}
 

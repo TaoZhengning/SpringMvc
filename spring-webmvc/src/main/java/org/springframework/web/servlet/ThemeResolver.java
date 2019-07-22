@@ -49,20 +49,12 @@ import org.springframework.lang.Nullable;
 public interface ThemeResolver {
 
 	/**
-	 * Resolve the current theme name via the given request.
-	 * Should return a default theme as fallback in any case.
-	 * @param request request to be used for resolution
-	 * @return the current theme name
+	 *  从请求中解析出使用的主题.比如 从请求头的"User-Agent" 判断使用的是PC端 还是手机端
 	 */
 	String resolveThemeName(HttpServletRequest request);
 
 	/**
-	 * Set the current theme name to the given one.
-	 * @param request request to be used for theme name modification
-	 * @param response response to be used for theme name modification
-	 * @param themeName the new theme name ({@code null} or empty to reset it)
-	 * @throws UnsupportedOperationException if the ThemeResolver implementation
-	 * does not support dynamic changing of the theme
+	 *  设置请求所使用的请求
 	 */
 	void setThemeName(HttpServletRequest request, @Nullable HttpServletResponse response, @Nullable String themeName);
 

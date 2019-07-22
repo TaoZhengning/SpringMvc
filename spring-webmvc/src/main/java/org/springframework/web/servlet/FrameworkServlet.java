@@ -526,7 +526,9 @@ public abstract class FrameworkServlet extends HttpServletBean implements Applic
 		long startTime = System.currentTimeMillis();
 
 		try {
+			// 初始化WebApplicationContext
 			this.webApplicationContext = initWebApplicationContext();
+			// 初始化FrameworkServlet
 			initFrameworkServlet();
 		}
 		catch (ServletException | RuntimeException ex) {
@@ -557,21 +559,19 @@ public abstract class FrameworkServlet extends HttpServletBean implements Applic
 	 * @see #setContextConfigLocation
 	 */
 	protected WebApplicationContext initWebApplicationContext() {
+		// 获取spring根容器
 		WebApplicationContext rootContext =
 				WebApplicationContextUtils.getWebApplicationContext(getServletContext());
 		WebApplicationContext wac = null;
 
+		// 如果已经通过构造函数设置了webApplicationContext
 		if (this.webApplicationContext != null) {
 			// A context instance was injected at construction time -> use it
 			wac = this.webApplicationContext;
 			if (wac instanceof ConfigurableWebApplicationContext) {
 				ConfigurableWebApplicationContext cwac = (ConfigurableWebApplicationContext) wac;
 				if (!cwac.isActive()) {
-					// The context has not yet been refreshed -> provide services such as
-					// setting the parent context, setting the application context id, etc
 					if (cwac.getParent() == null) {
-						// The context instance was injected without an explicit parent -> set
-						// the root application context (if any; may be null) as the parent
 						cwac.setParent(rootContext);
 					}
 					configureAndRefreshWebApplicationContext(cwac);
@@ -579,28 +579,23 @@ public abstract class FrameworkServlet extends HttpServletBean implements Applic
 			}
 		}
 		if (wac == null) {
-			// No context instance was injected at construction time -> see if one
-			// has been registered in the servlet context. If one exists, it is assumed
-			// that the parent context (if any) has already been set and that the
-			// user has performed any initialization such as setting the context id
+			// 当webApplicationContext存在于ServletContext中 通过配置在ServletContext中的contextAttribute参数获取
 			wac = findWebApplicationContext();
 		}
 		if (wac == null) {
-			// No context instance is defined for this servlet -> create a local one
+			// 如果都没有的话 则创建一个webApplicationContext
 			wac = createWebApplicationContext(rootContext);
 		}
 
+		// 如果ContextRefreshEvent事件没有触发时 调用此方法 模版方法 可以在子类中重写
 		if (!this.refreshEventReceived) {
-			// Either the context is not a ConfigurableApplicationContext with refresh
-			// support or the context injected at construction time had already been
-			// refreshed -> trigger initial onRefresh manually here.
 			synchronized (this.onRefreshMonitor) {
 				onRefresh(wac);
 			}
 		}
 
 		if (this.publishContext) {
-			// Publish the context as a servlet context attribute.
+			// 将WebApplicationContext保存到ServletContext中
 			String attrName = getServletContextAttributeName();
 			getServletContext().setAttribute(attrName, wac);
 		}
@@ -931,6 +926,18 @@ public abstract class FrameworkServlet extends HttpServletBean implements Applic
 	}
 
 	/**
+	 * Build a LocaleContext for the given request, exposing the request's
+	 * primary locale as current locale.
+	 * @param request current HTTP request
+	 * @return the corresponding LocaleContext, or {@code null} if none to bind
+	 * @see LocaleContextHolder#setLocaleContext
+	 */
+	@Nullable
+	protected LocaleContext buildLocaleContext(HttpServletRequest request) {
+		return new SimpleLocaleContext(request.getLocale());
+	}
+
+	/**
 	 * Delegate OPTIONS requests to {@link #processRequest}, if desired.
 	 * <p>Applies HttpServlet's standard OPTIONS processing otherwise,
 	 * and also if there is still no 'Allow' header set after dispatching.
@@ -990,18 +997,24 @@ public abstract class FrameworkServlet extends HttpServletBean implements Applic
 		long startTime = System.currentTimeMillis();
 		Throwable failureCause = null;
 
+		// 获取LocaleContextHolder原先保存的LocaleContext
 		LocaleContext previousLocaleContext = LocaleContextHolder.getLocaleContext();
+		// 获取当前请求的localeContext
 		LocaleContext localeContext = buildLocaleContext(request);
-
+		// 获取RequestContextHolder中原先保存的RequestAttributes
 		RequestAttributes previousAttributes = RequestContextHolder.getRequestAttributes();
+		// 获取当前请求的ServletRequestAttributes
 		ServletRequestAttributes requestAttributes = buildRequestAttributes(request, response, previousAttributes);
 
+		// 通过request获取到异步管理器
 		WebAsyncManager asyncManager = WebAsyncUtils.getAsyncManager(request);
+		// 设置拦截器
 		asyncManager.registerCallableInterceptor(FrameworkServlet.class.getName(), new RequestBindingInterceptor());
-
+		// 将LocaleContext 和 ServletRequestAttributes保存到LocaleContextHolder 和 RequestContextHolder
 		initContextHolders(request, localeContext, requestAttributes);
 
 		try {
+			// 模版方法 processRequest中的核心方法 实际请求处理入口
 			doService(request, response);
 		}
 		catch (ServletException | IOException ex) {
@@ -1014,6 +1027,7 @@ public abstract class FrameworkServlet extends HttpServletBean implements Applic
 		}
 
 		finally {
+			// 将LocalContextHolder和RequestContextHolder的保存恢复到原来的LocalContext和 RequestAttributes
 			resetContextHolders(request, previousLocaleContext, previousAttributes);
 			if (requestAttributes != null) {
 				requestAttributes.requestCompleted();
@@ -1023,16 +1037,15 @@ public abstract class FrameworkServlet extends HttpServletBean implements Applic
 		}
 	}
 
-	/**
-	 * Build a LocaleContext for the given request, exposing the request's
-	 * primary locale as current locale.
-	 * @param request current HTTP request
-	 * @return the corresponding LocaleContext, or {@code null} if none to bind
-	 * @see LocaleContextHolder#setLocaleContext
-	 */
-	@Nullable
-	protected LocaleContext buildLocaleContext(HttpServletRequest request) {
-		return new SimpleLocaleContext(request.getLocale());
+	private void initContextHolders(HttpServletRequest request,
+									@Nullable LocaleContext localeContext, @Nullable RequestAttributes requestAttributes) {
+
+		if (localeContext != null) {
+			LocaleContextHolder.setLocaleContext(localeContext, this.threadContextInheritable);
+		}
+		if (requestAttributes != null) {
+			RequestContextHolder.setRequestAttributes(requestAttributes, this.threadContextInheritable);
+		}
 	}
 
 	/**
@@ -1055,17 +1068,6 @@ public abstract class FrameworkServlet extends HttpServletBean implements Applic
 		}
 		else {
 			return null;  // preserve the pre-bound RequestAttributes instance
-		}
-	}
-
-	private void initContextHolders(HttpServletRequest request,
-			@Nullable LocaleContext localeContext, @Nullable RequestAttributes requestAttributes) {
-
-		if (localeContext != null) {
-			LocaleContextHolder.setLocaleContext(localeContext, this.threadContextInheritable);
-		}
-		if (requestAttributes != null) {
-			RequestContextHolder.setRequestAttributes(requestAttributes, this.threadContextInheritable);
 		}
 	}
 
